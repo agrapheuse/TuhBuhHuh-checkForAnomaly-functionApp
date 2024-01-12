@@ -2,7 +2,6 @@ import logging
 import azure.functions as func
 import pika
 import os
-from azure.storage.blob import BlobServiceClient
 from io import StringIO
 import pandas as pd
 from sklearn.impute import KNNImputer
