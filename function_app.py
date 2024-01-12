@@ -32,10 +32,10 @@ def checkForAnomaly(message: func.ServiceBusMessage) -> None:
 
 def send_anomaly_data_to_queue(anomalies):
     connection_params = pika.ConnectionParameters(
-        host='localhost',
-        port=5673,
-        virtual_host='/',
-        credentials=pika.PlainCredentials('myuser', 'mypassword')
+        host=os.environ['RABBITMQ_HOST'],
+        port=os.environ['RABBITMQ_PORT'],
+        virtual_host=['RABBITMQ_VHOST'],
+        credentials=pika.PlainCredentials(os.environ['RABBITMQ_USER'], os.environ['RABBITMQ_PASS'])
     )
 
     connection = pika.BlockingConnection(connection_params)
