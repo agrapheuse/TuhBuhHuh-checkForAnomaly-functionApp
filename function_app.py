@@ -10,6 +10,7 @@ import numpy as np
 
 
 
+
 app = func.FunctionApp()
 
 @app.service_bus_queue_trigger(arg_name="message", 
@@ -19,20 +20,17 @@ def checkForAnomaly(message: func.ServiceBusMessage) -> None:
     logging.info('Python ServiceBus Queue trigger processed a message: %s',
                 message.get_body().decode('utf-8'))
     
-    print("timer triggered")
-    connection_string = "DefaultEndpointsProtocol=https;AccountName=datalaketuhbehhuh;AccountKey=C2te9RgBRHhIH8u3tydAsn9wNd4umdD2axq1ZdcfKh7CZRpL04+D4H6QinE/gckMTUA/dFj1kFpd+ASt4+/8ZA==;EndpointSuffix=core.windows.net"
-    blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-    print("blob service client created")
-    print(blob_service_client.account_name)
-    data= get_data_from_blob(blob_service_client, "csv")
-    print(data)
-    detect_anomaly(data)
-    anomaly = detect_anomaly(data)
-    if anomaly:
-        send_anomaly_data_to_queue(anomaly)
+    print("Service Bus message received")
+    data = message.get_body().decode('utf-8')
+    structured_data = process_data(data)
+    detect_anomaly(structured_data)
+    anomalies = detect_anomaly(structured_data)
+    if anomalies:
+        # If anomaly detected, send the anomaly data to another queue
+        send_anomaly_data_to_queue(anomalies)
 
 
-def send_anomaly_data_to_queue():
+def send_anomaly_data_to_queue(anomalies):
     connection_params = pika.ConnectionParameters(
         host='localhost',
         port=5673,
@@ -45,37 +43,14 @@ def send_anomaly_data_to_queue():
 
     queue_name = 'new_data_queue'
     channel.queue_declare(queue=queue_name, durable=True)
-    
-    connection_string = os.environ["MyStorageAccountConnection"]
-    blob_service_client = BlobServiceClient.from_connection_string(connection_string)
-    container_client = blob_service_client.get_container_client("csv")
-    blobs = container_client.list_blobs()
-    for b in blobs:
-        print(b.name)
-        download_blob(blob_service_client, "csv", b.name)
-
-    channel.basic_publish(exchange='', routing_key=queue_name, body="hello")
-    logging.info(f"sent hello to queue {queue_name}")
+    logging.info('Sending anomaly data to queue: %s', queue_name)
+    channel.basic_publish(exchange='', routing_key=queue_name, body=anomalies)
 
     connection.close()
 
-
-def get_data_from_blob(blob_service_client, folder):
-    container_client = blob_service_client.get_container_client("csv")
-    blob_list = container_client.list_blobs(name_starts_with=folder)
-    
-    for blob in blob_list:
-        df = download_blob(blob_service_client, "csv", blob.name)
-        merged_df = merge_two_df(merged_df, df)
-        
-    merged_df = pd.DataFrame(columns=["squareUUID", "timestamp", "BIKE", "CAR", "HEAVY", "HUMIDITY", "PEDESTRIAN", "PM10", "PM25", "TEMPERATURE"])
-    
-    merged_df = merged_df.drop(columns="squareUUID", axis=1)
-    return merged_df
-
-def merge_two_df(df1, df2):
-    appended_df = pd.concat([df1, df2], ignore_index=True)
-    return appended_df
+def process_data(data):
+    df = pd.read_csv(StringIO(data))
+    return df
 
 
 def detect_anomaly(df):
@@ -86,12 +61,3 @@ def detect_anomaly(df):
     y_pred_outliers = model.predict(df)
     print(y_pred_outliers)
     return y_pred_outliers
-
-
-
-def download_blob(blob_service_client: BlobServiceClient, container_name, blob_name):
-    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
-    blob_data = blob_client.download_blob()
-    csv_file = StringIO(blob_data.readall().decode('utf-8'))
-    df = pd.read_csv(csv_file)
-    return df
