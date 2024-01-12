@@ -12,6 +12,7 @@ from sklearn.ensemble import IsolationForest
 @app.schedule(schedule="* */15 * * *", arg_name="myTimer", run_on_startup=True,
               use_monitor=False)
 def checkForAnomaly(myTimer: func.TimerRequest) -> None:
+    data= get_data_from_blob()
     data = get_data_from_all_out_folder();
     anomaly = detect_anomaly(data)
     if anomaly:
