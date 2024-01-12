@@ -5,6 +5,7 @@ import os
 from azure.storage.blob import BlobServiceClient
 from io import StringIO
 import pandas as pd
+from sklearn.impute import KNNImputer
 from sklearn.ensemble import IsolationForest
 import numpy as np
 
@@ -23,7 +24,6 @@ def checkForAnomaly(message: func.ServiceBusMessage) -> None:
     print("Service Bus message received")
     data = message.get_body().decode('utf-8')
     structured_data = process_data(data)
-    detect_anomaly(structured_data)
     anomalies = detect_anomaly(structured_data)
     if anomalies:
         # If anomaly detected, send the anomaly data to another queue
@@ -49,15 +49,30 @@ def send_anomaly_data_to_queue(anomalies):
     connection.close()
 
 def process_data(data):
-    df = pd.read_csv(StringIO(data))
+    df = pd.read_csv(StringIO(data), index_col=0, parse_dates=True, dtype=float)
+    original_data = df.copy()
+    # if there is a column with no values at all, it will be dropped
+    df = df.dropna(axis=1, how='all')
+    #  Using KnnImputer to fill the missing values
+    kni = KNNImputer(missing_values=np.nan)
+    kni.fit(df)
+    df = pd.DataFrame(df=kni.transform(df), index=data.index)
+    original_data = original_data.drop(df.columns, axis=1)
+    df = pd.concat([df, original_data], axis=1)   
     return df
 
 
-def detect_anomaly(df):
+def detect_anomaly(data):
+    original_data = data.copy()
+    # if there is a column with no values at all, it will be dropped
+    data = data.dropna(axis=1, how='all')
     random_state = np.random.RandomState(42)
     model=IsolationForest(n_estimators=100,max_samples='auto',contamination=float(0.2),random_state=random_state)
-    model.fit(df)
-    print(model.get_params())
-    y_pred_outliers = model.predict(df)
-    print(y_pred_outliers)
-    return y_pred_outliers
+    model.fit(data)
+    y_pred_outliers = model.predict(data)
+    original_data['outlier'] = y_pred_outliers
+    original_data[original_data['outlier']==-1]
+    original_data = original_data.drop(data.columns, axis=1)
+    data = pd.concat([original_data, data], axis=1)  
+    
+    return data
