@@ -1,4 +1,4 @@
-all_out/
+venv/
 data/
 
 # Byte-compiled / optimized / DLL files
@@ -8,8 +8,6 @@ __pycache__/
 
 # C extensions
 *.so
-
-# VS Code
 
 # Distribution / packaging
 .Python

@@ -9,18 +9,16 @@ from sklearn.ensemble import IsolationForest
 import numpy as np
 
 
-
-
 app = func.FunctionApp()
+
 
 @app.service_bus_queue_trigger(arg_name="message", 
                                 queue_name="agg-data-to-anomaly-detection",
                                 connection="AzureWebJobsServiceBus") 
-def checkForAnomaly(message: func.ServiceBusMessage) -> None:
+def main(message: func.ServiceBusMessage) -> None:
     logging.info('Python ServiceBus Queue trigger processed a message: %s',
                 message.get_body().decode('utf-8'))
     
-    print("Service Bus message received")
     data = message.get_body().decode('utf-8')
     structured_data = process_data(data)
     anomalies = detect_anomaly(structured_data)
@@ -36,11 +34,10 @@ def send_anomaly_data_to_queue(anomalies):
         virtual_host=['RABBITMQ_VHOST'],
         credentials=pika.PlainCredentials(os.environ['RABBITMQ_USER'], os.environ['RABBITMQ_PASS'])
     )
+    queue_name = "new_anomaly_event"
 
     connection = pika.BlockingConnection(connection_params)
     channel = connection.channel()
-
-    queue_name = 'new_data_queue'
     channel.queue_declare(queue=queue_name, durable=True)
     logging.info('Sending anomaly data to queue: %s', queue_name)
     channel.basic_publish(exchange='', routing_key=queue_name, body=anomalies)
@@ -69,9 +66,12 @@ def detect_anomaly(data):
     model=IsolationForest(n_estimators=100,max_samples='auto',contamination=float(0.2),random_state=random_state)
     model.fit(data)
     y_pred_outliers = model.predict(data)
-    original_data['outlier'] = y_pred_outliers
-    original_data[original_data['outlier']==-1]
+    data['outlier'] = y_pred_outliers
+    
+    # Put the deleted/empty columns back.
     original_data = original_data.drop(data.columns, axis=1)
     data = pd.concat([original_data, data], axis=1)  
     
+    # only return rows where  outlier is -1
+    data = data[data['outlier']==-1]
     return data
