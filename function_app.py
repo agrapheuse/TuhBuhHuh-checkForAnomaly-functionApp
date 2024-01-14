@@ -3,6 +3,7 @@ import azure.functions as func
 import pika
 import os
 from io import StringIO
+from azure.storage.blob import BlobServiceClient
 import pandas as pd
 from sklearn.impute import KNNImputer
 from sklearn.ensemble import IsolationForest
@@ -19,12 +20,27 @@ def main(message: func.ServiceBusMessage) -> None:
     logging.info('Python ServiceBus Queue trigger processed a message: %s',
                 message.get_body().decode('utf-8'))
     
-    data = message.get_body().decode('utf-8')
+    file_path = message.get_body().decode('utf-8')
+    
+    connection_string = "DefaultEndpointsProtocol=https;AccountName=datalaketuhbehhuh;AccountKey=C2te9RgBRHhIH8u3tydAsn9wNd4umdD2axq1ZdcfKh7CZRpL04+D4H6QinE/gckMTUA/dFj1kFpd+ASt4+/8ZA==;EndpointSuffix=core.windows.net"
+    blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+    
+    
+    data = download_blob_to_file(blob_service_client, 'csv', file_path) 
     structured_data = process_data(data)
     anomalies = detect_anomaly(structured_data)
     if anomalies:
         # If anomaly detected, send the anomaly data to another queue
         send_anomaly_data_to_queue(anomalies)
+
+def download_blob_to_file(blob_service_client: BlobServiceClient, container_name, blob_name):
+    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+    blob_data = blob_client.download_blob()
+
+    csv_file = StringIO(blob_data.readall().decode('utf-8'))
+    df = pd.read_csv(csv_file)
+    return df
+
 
 
 def send_anomaly_data_to_queue(anomalies):
@@ -66,6 +82,7 @@ def detect_anomaly(data):
     model=IsolationForest(n_estimators=100,max_samples='auto',contamination=float(0.2),random_state=random_state)
     model.fit(data)
     y_pred_outliers = model.predict(data)
+    data['anomaly_score'] = model.decision_function(data)
     data['outlier'] = y_pred_outliers
     
     # Put the deleted/empty columns back.
