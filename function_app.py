@@ -34,8 +34,10 @@ def main(message: func.ServiceBusMessage) -> None:
     
     data = download_blob_to_file(blob_service_client, 'csv', file_path) 
     logging.warning('Blob downloaded: %s', file_path)
-    structured_data = process_data(data)
-    anomalies = detect_anomaly(structured_data)
+    
+    original_data = data.copy()
+    structured_data = process_data(data, original_data)
+    anomalies = detect_anomaly(structured_data,original_data)
     logging.warning('Anomalies detected: %s', anomalies)
     send_anomaly_data_to_queue(anomalies)
 
@@ -65,27 +67,28 @@ def send_anomaly_data_to_queue(anomalies):
 
     connection.close()
 
-def process_data(df):
-    original_data = df.copy()
+def process_data(knn_imputer,df, original_data):
     logging.warning('Processing data: %s', df)
     # if there is a column with no values at all, it will be dropped
     df = df.dropna(axis=1, how='all')
+    
     #  Using KnnImputer to fill the missing values
-    kni = KNNImputer(missing_values=np.nan)
-    kni.fit(df)
-    df = pd.DataFrame(df=kni.transform(df), index=original_data.index)
+    kni = KNNImputer(missing_values=np.nan, copy=False, add_indicator=True, weights='distance')
+    df = pd.DataFrame(df=kni.fit_transform(df), index=original_data.index)
+    
+    # Put the deleted/empty columns back.
     original_data = original_data.drop(df.columns, axis=1)
-    df = pd.concat([df, original_data], axis=1)   
+    df = pd.concat([df, original_data], axis=1)
+    
+    logging.warning('Data processed: %s', df)
     return df
 
 
-def detect_anomaly(data):
-    original_data = data.copy()
-    logging.warning('Detecting anomalies: %s', data)
+def detect_anomaly(data, original_data):
+    logging.warning('Detecting anomalies')
     # if there is a column with no values at all, it will be dropped
     data = data.dropna(axis=1, how='all')
-    random_state = np.random.RandomState(42)
-    model=IsolationForest(n_estimators=100,max_samples='auto',contamination=float(0.2),random_state=random_state)
+    model=IsolationForest(n_estimators=100,max_samples='auto',contamination=float(0.2),random_state=42)
     model.fit(data)
     y_pred_outliers = model.predict(data)
     data['anomaly_score'] = model.decision_function(data)
