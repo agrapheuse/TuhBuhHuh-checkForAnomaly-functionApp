@@ -17,28 +17,33 @@ app = func.FunctionApp()
                                 queue_name="agg-data-to-anomaly-detection",
                                 connection="AzureWebJobsServiceBus") 
 def main(message: func.ServiceBusMessage) -> None:
-    logging.info('Python ServiceBus Queue trigger processed a message: %s',
+    logging.warning('Python ServiceBus Queue trigger processed a message: %s',
                 message.get_body().decode('utf-8'))
     
     file_path = message.get_body().decode('utf-8')
     
+    # remove the first '/history' from the path
+    file_path = file_path.replace("/history", "", 1)
+    
     connection_string = "DefaultEndpointsProtocol=https;AccountName=datalaketuhbehhuh;AccountKey=C2te9RgBRHhIH8u3tydAsn9wNd4umdD2axq1ZdcfKh7CZRpL04+D4H6QinE/gckMTUA/dFj1kFpd+ASt4+/8ZA==;EndpointSuffix=core.windows.net"
     blob_service_client = BlobServiceClient.from_connection_string(connection_string)
     
+    logging.warning('bob service client: %s', blob_service_client.get_account_information())
+    
+    logging.warning('Downloading blob: %s', file_path)
     
     data = download_blob_to_file(blob_service_client, 'csv', file_path) 
+    logging.warning('Blob downloaded: %s', file_path)
     structured_data = process_data(data)
     anomalies = detect_anomaly(structured_data)
-    if anomalies:
-        # If anomaly detected, send the anomaly data to another queue
-        send_anomaly_data_to_queue(anomalies)
+    logging.warning('Anomalies detected: %s', anomalies)
+    send_anomaly_data_to_queue(anomalies)
 
 def download_blob_to_file(blob_service_client: BlobServiceClient, container_name, blob_name):
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
     blob_data = blob_client.download_blob()
-
     csv_file = StringIO(blob_data.readall().decode('utf-8'))
-    df = pd.read_csv(csv_file)
+    df = pd.read_csv(csv_file, index_col=0, parse_dates=True, dtype=float)
     return df
 
 
@@ -60,15 +65,15 @@ def send_anomaly_data_to_queue(anomalies):
 
     connection.close()
 
-def process_data(data):
-    df = pd.read_csv(StringIO(data), index_col=0, parse_dates=True, dtype=float)
+def process_data(df):
     original_data = df.copy()
+    logging.warning('Processing data: %s', df)
     # if there is a column with no values at all, it will be dropped
     df = df.dropna(axis=1, how='all')
     #  Using KnnImputer to fill the missing values
     kni = KNNImputer(missing_values=np.nan)
     kni.fit(df)
-    df = pd.DataFrame(df=kni.transform(df), index=data.index)
+    df = pd.DataFrame(df=kni.transform(df), index=original_data.index)
     original_data = original_data.drop(df.columns, axis=1)
     df = pd.concat([df, original_data], axis=1)   
     return df
@@ -76,6 +81,7 @@ def process_data(data):
 
 def detect_anomaly(data):
     original_data = data.copy()
+    logging.warning('Detecting anomalies: %s', data)
     # if there is a column with no values at all, it will be dropped
     data = data.dropna(axis=1, how='all')
     random_state = np.random.RandomState(42)
