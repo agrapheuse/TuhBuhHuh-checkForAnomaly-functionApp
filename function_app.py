@@ -67,7 +67,7 @@ def send_anomaly_data_to_queue(anomalies):
 
     connection.close()
 
-def process_data(knn_imputer,df, original_data):
+def process_data(df, original_data):
     logging.warning('Processing data: %s', df)
     # if there is a column with no values at all, it will be dropped
     df = df.dropna(axis=1, how='all')
