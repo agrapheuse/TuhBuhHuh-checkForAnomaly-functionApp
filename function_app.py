@@ -87,9 +87,9 @@ def send_anomaly_data_to_queue(anomalies):
     connection = pika.BlockingConnection(connection_params)
     channel = connection.channel()
     channel.queue_declare(queue=queue_name, durable=True)
-    logging.info('Sending anomaly data to queue: %s', queue_name)
+    logging.warning('Sending anomaly data to queue: %s', queue_name)
     channel.basic_publish(exchange='', routing_key=queue_name, body=anomalies)
-
+    logging.warning('Anomaly data sent to queue: %s', queue_name)
     connection.close()
 
 def process_data(df):
