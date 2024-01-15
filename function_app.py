@@ -137,8 +137,8 @@ def process_data(df):
     df = df.dropna(axis=1, how='all')
     
     #  Using KnnImputer to fill the missing values
-    kni = KNNImputer(missing_values=np.nan, copy=False, add_indicator=True, weights='distance')
-    # kni = SimpleImputer(missing_values=np.nan, strategy='mean')
+    # kni = KNNImputer(missing_values=np.nan, copy=False, add_indicator=True, weights='distance')
+    kni = SimpleImputer(missing_values=np.nan, strategy='mean')
     df = pd.DataFrame(kni.fit_transform(df), index=df.index, columns=df.columns)    
     logging.warning('Data processed: %s', df)
     return df
