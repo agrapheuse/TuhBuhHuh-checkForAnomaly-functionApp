@@ -11,7 +11,8 @@ import numpy as np
 import json
 import uuid
 from enum import Enum
-
+import time
+import random
 
 
 
@@ -46,6 +47,7 @@ def main(message: func.ServiceBusMessage) -> None:
     if anomalies.empty == False:
         logging.warning('Anomalies detected: %s', anomalies)
         anomaly_df = process_anomalies(anomalies, square_uuid=square_uuid)
+        time.sleep(random.uniform(10, 500))
         send_anomaly_data_to_queue(anomaly_df)
     else:
         logging.warning('No anomalies detected')
@@ -109,8 +111,11 @@ def send_anomaly_data_to_queue(anomalies):
     logging.warning('Sending anomaly data to queue: %s', queue_name)
     
     # convert the dataframe to dict
-    data_list['dateTime'] = data_list['dateTime'].astype(str)
     data_list = anomalies.to_dict(orient='records')
+    
+    # Convert 'dateTime' values to strings
+    for record in data_list:
+        record['dateTime'] = str(record['dateTime'])
 
     # create the event message
     event_header = EventHeader(uuid.uuid4(), EventCatalog.NEW_ANOMALY_DATA)
@@ -123,10 +128,6 @@ def send_anomaly_data_to_queue(anomalies):
     }
     # convert the event message to json
     json_payload = json.dumps(event_message_dict)
-
-    
-    
-    
     channel.basic_publish(exchange='', routing_key=queue_name, body=json_payload)
     logging.warning('Anomaly data sent to queue: %s', queue_name)
     connection.close()
