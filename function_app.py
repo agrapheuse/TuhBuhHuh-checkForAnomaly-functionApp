@@ -31,7 +31,7 @@ def main(message: func.ServiceBusMessage) -> None:
     file_path = file_path.replace("/history", "", 1)
     square_uuid = file_path.split('/')[1]
     
-    connection_string = "DefaultEndpointsProtocol=https;AccountName=datalaketuhbehhuh;AccountKey=C2te9RgBRHhIH8u3tydAsn9wNd4umdD2axq1ZdcfKh7CZRpL04+D4H6QinE/gckMTUA/dFj1kFpd+ASt4+/8ZA==;EndpointSuffix=core.windows.net"
+    connection_string = os.environ["AzureWebJobsStorage"]
     blob_service_client = BlobServiceClient.from_connection_string(connection_string)
     
     logging.warning('bob service client: %s', blob_service_client.get_account_information())
