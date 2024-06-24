@@ -1,0 +1,1 @@
+# checkForAnomaly-functionApp
